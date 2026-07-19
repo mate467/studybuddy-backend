@@ -7,7 +7,9 @@ const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
 
 const app = express();
-const PORT = 3000;
+
+// ✅ CORRIGIDO: O Render exige que o servidor use a porta que ele definir via process.env.PORT
+const PORT = process.env.PORT || 3000;
 
 // Configurações Globais (Middlewares)
 app.use(cors());
@@ -19,7 +21,11 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const FILE_PATH = path.join(__dirname, 'usuarios.json');
 
 const lerUsuarios = () => {
-    if (!fs.existsSync(FILE_PATH)) return [];
+    if (!fs.existsSync(FILE_PATH)) {
+        // ✅ CORRIGIDO: Garante que o arquivo exista na nuvem se ele sumir ao reiniciar o container
+        fs.writeFileSync(FILE_PATH, '[]');
+        return [];
+    }
     const dados = fs.readFileSync(FILE_PATH, 'utf-8');
     return JSON.parse(dados || '[]');
 };
@@ -29,7 +35,7 @@ const salvarUsuarios = (usuarios) => {
 };
 
 // ==========================================
-// ROTAS DO SISTEMA (Devem ficar ANTES do listen)
+// ROTAS DO SISTEMA
 // ==========================================
 
 // Rota base para testar no navegador
@@ -107,7 +113,6 @@ app.post('/api/chat', async (req, res) => {
     }
 
     try {
-        // ✅ CORRIGIDO: modelo atualizado (gemini-2.5-flash foi descontinuado)
         const response = await ai.models.generateContent({
             model: 'gemini-flash-latest',
             contents: `Você é o StudyBuddy AI, um assistente virtual focado em ajudar estudantes de forma didática e clara. Pergunta do aluno: ${textoUsuario}`,
@@ -120,7 +125,7 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// ✅ CORRIGIDO: app.listen estava faltando — por isso o servidor não subia
+// ✅ ALTERADO: Escutando na porta dinâmica do ambiente ou 3000 localmente
 app.listen(PORT, () => {
-    console.log(`Servidor do StudyBuddy AI rodando em http://localhost:${PORT}`);
+    console.log(`Servidor do StudyBuddy AI rodando na porta ${PORT}`);
 });
