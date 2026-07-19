@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Inicializando a IA com a chave salva no seu arquivo .env
+//  COMO DEVE FICAR (CORRIGIDO PARA O RENDER):
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // ✅ SALVA EM MEMÓRIA: Evita bugs de escrita de arquivo no ambiente do Render
