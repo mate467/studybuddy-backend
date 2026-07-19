@@ -1,14 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
 const bcrypt = require('bcryptjs');
 const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
 
 const app = express();
 
-// ✅ CORRIGIDO: O Render exige que o servidor use a porta que ele definir via process.env.PORT
+// O Render exige que o servidor use a porta que ele definir via process.env.PORT
 const PORT = process.env.PORT || 3000;
 
 // Configurações Globais (Middlewares)
@@ -18,21 +16,8 @@ app.use(express.json());
 // Inicializando a IA com a chave salva no seu arquivo .env
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const FILE_PATH = path.join(__dirname, 'usuarios.json');
-
-const lerUsuarios = () => {
-    if (!fs.existsSync(FILE_PATH)) {
-        // ✅ CORRIGIDO: Garante que o arquivo exista na nuvem se ele sumir ao reiniciar o container
-        fs.writeFileSync(FILE_PATH, '[]');
-        return [];
-    }
-    const dados = fs.readFileSync(FILE_PATH, 'utf-8');
-    return JSON.parse(dados || '[]');
-};
-
-const salvarUsuarios = (usuarios) => {
-    fs.writeFileSync(FILE_PATH, JSON.stringify(usuarios, null, 2));
-};
+// ✅ SALVA EM MEMÓRIA: Evita bugs de escrita de arquivo no ambiente do Render
+let BANCO_DE_DADOS_MEMORIA = [];
 
 // ==========================================
 // ROTAS DO SISTEMA
@@ -40,7 +25,7 @@ const salvarUsuarios = (usuarios) => {
 
 // Rota base para testar no navegador
 app.get('/', (req, res) => {
-    res.send('Servidor do StudyBuddy AI está online!');
+    res.send('Servidor do StudyBuddy AI está online e voando!');
 });
 
 // RF01 - Cadastro de Usuário
@@ -50,8 +35,8 @@ app.post('/api/cadastro', async (req, res) => {
         return res.status(400).json({ erro: 'Por favor, preencha todos os campos.' });
     }
 
-    const usuarios = lerUsuarios();
-    const usuarioExiste = usuarios.find(u => u.email === email);
+    // Procura na variável global
+    const usuarioExiste = BANCO_DE_DADOS_MEMORIA.find(u => u.email === email);
     if (usuarioExiste) {
         return res.status(400).json({ erro: 'Este e-mail já está cadastrado.' });
     }
@@ -67,8 +52,8 @@ app.post('/api/cadastro', async (req, res) => {
             senha: senhaCriptografada
         };
 
-        usuarios.push(novoUsuario);
-        salvarUsuarios(usuarios);
+        // Salva direto na memória
+        BANCO_DE_DADOS_MEMORIA.push(novoUsuario);
 
         res.status(201).json({ mensagem: 'Usuário cadastrado com sucesso!' });
     } catch (erro) {
@@ -83,8 +68,8 @@ app.post('/api/login', async (req, res) => {
         return res.status(400).json({ erro: 'Por favor, preencha e-mail e senha.' });
     }
 
-    const usuarios = lerUsuarios();
-    const usuario = usuarios.find(u => u.email === email);
+    // Busca na variável global
+    const usuario = BANCO_DE_DADOS_MEMORIA.find(u => u.email === email);
     if (!usuario) {
         return res.status(400).json({ erro: 'E-mail ou senha incorretos.' });
     }
@@ -125,7 +110,6 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// ✅ ALTERADO: Escutando na porta dinâmica do ambiente ou 3000 localmente
 app.listen(PORT, () => {
     console.log(`Servidor do StudyBuddy AI rodando na porta ${PORT}`);
 });
