@@ -89,7 +89,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// RF06 e RF07 - Chat com Inteligência Artificial (Com Sistema Anti-Bloqueio / Fallback)
+// RF06 e RF07 - Chat com Inteligência Artificial (Nomes de modelos padronizados)
 app.post('/api/chat', async (req, res) => {
     const textoUsuario = req.body.mensagem || req.body.message;
 
@@ -100,21 +100,21 @@ app.post('/api/chat', async (req, res) => {
     const prompt = `Você é o StudyBuddy AI, um assistente virtual focado em ajudar estudantes de forma didática e clara. Pergunta do aluno: ${textoUsuario}`;
 
     try {
-        // TENTA O MODELO PRINCIPAL PRIMEIRO
+        // Tenta o modelo principal (gemini-2.0-flash)
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: prompt,
         });
 
         return res.status(200).json({ resposta: response.text });
 
     } catch (erro) {
-        console.warn('Modelo principal ocupado/sem cota. Tentando modelo reserva...');
+        console.warn('Modelo principal falhou ou excedeu cota. Tentando modelo reserva...', erro.message || erro);
 
         try {
-            // TENTATIVA 2: SE O PRIMEIRO ESTIVER LOTADO (429), TENTA O MODELO RESERVA OFICIAL
+            // Tenta o modelo reserva oficial (gemini-1.5-flash)
             const responseBackup = await ai.models.generateContent({
-                model: 'gemini-1.5-flash-latest',
+                model: 'gemini-1.5-flash',
                 contents: prompt,
             });
 
@@ -125,7 +125,7 @@ app.post('/api/chat', async (req, res) => {
 
             const mensagemErro = erroBackup.message || '';
             
-            // Verifica se o erro foi por conta do limite de requisições (429)
+            // Trata o erro de cota / limite (429)
             if (erroBackup.status === 429 || mensagemErro.includes('429') || mensagemErro.includes('quota')) {
                 return res.status(429).json({ 
                     erro: 'Os servidores da IA estão muito ocupados no momento. Por favor, aguarde cerca de 15 a 20 segundos e tente novamente.' 
