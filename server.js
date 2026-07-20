@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
-const { GoogleGenAI } = require('@google/genai');
+const { OpenAI } = require('openai');
 require('dotenv').config();
 
 const app = express();
@@ -13,10 +13,14 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Inicializando a IA do Gemini com a chave de API das variáveis de ambiente
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Inicializando a conexão com a Groq usando a biblioteca da OpenAI
+// Certifique-se de que a variável no .env e no Render se chama GROQ_API_KEY
+const openai = new OpenAI({
+    apiKey: process.env.GROQ_API_KEY,
+    baseURL: "https://api.groq.com/openai/v1" 
+});
 
-// BANCO EM MEMÓRIA (Útil para testes rápidos de requisições no servidor)
+// BANCO DE DADOS EM MEMÓRIA
 let BANCO_DE_DADOS_MEMORIA = [];
 
 // ==========================================
@@ -25,7 +29,7 @@ let BANCO_DE_DADOS_MEMORIA = [];
 
 // Rota base para testar no navegador
 app.get('/', (req, res) => {
-    res.send('Servidor do StudyBuddy AI está online e voando!');
+    res.send('Servidor do StudyBuddy AI está online e rodando com a Groq (Llama 3)!');
 });
 
 // RF01 - Cadastro de Usuário
@@ -35,7 +39,6 @@ app.post('/api/cadastro', async (req, res) => {
         return res.status(400).json({ erro: 'Por favor, preencha todos os campos.' });
     }
 
-    // Procura na variável global
     const usuarioExiste = BANCO_DE_DADOS_MEMORIA.find(u => u.email === email);
     if (usuarioExiste) {
         return res.status(400).json({ erro: 'Este e-mail já está cadastrado.' });
@@ -52,9 +55,7 @@ app.post('/api/cadastro', async (req, res) => {
             senha: senhaCriptografada
         };
 
-        // Salva direto na memória
         BANCO_DE_DADOS_MEMORIA.push(novoUsuario);
-
         res.status(201).json({ mensagem: 'Usuário cadastrado com sucesso!' });
     } catch (erro) {
         res.status(500).json({ erro: 'Erro ao processar o cadastro.' });
@@ -68,7 +69,6 @@ app.post('/api/login', async (req, res) => {
         return res.status(400).json({ erro: 'Por favor, preencha e-mail e senha.' });
     }
 
-    // Busca na variável global
     const usuario = BANCO_DE_DADOS_MEMORIA.find(u => u.email === email);
     if (!usuario) {
         return res.status(400).json({ erro: 'E-mail ou senha incorretos.' });
@@ -89,7 +89,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// RF06 e RF07 - Chat com Inteligência Artificial (Modelos e Fallback Corrigidos)
+// RF06 e RF07 - Chat com Inteligência Artificial (Agora usando Groq / Llama 3)
 app.post('/api/chat', async (req, res) => {
     const textoUsuario = req.body.mensagem || req.body.message;
 
@@ -97,45 +97,30 @@ app.post('/api/chat', async (req, res) => {
         return res.status(400).json({ erro: 'A mensagem não pode estar vazia.' });
     }
 
-    const prompt = `Você é o StudyBuddy AI, um assistente virtual focado em ajudar estudantes de forma didática e clara. Pergunta do aluno: ${textoUsuario}`;
-
     try {
-        // 1. TENTA O MODELO PRINCIPAL (gemini-2.5-flash)
-        const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: prompt,
+        const response = await openai.chat.completions.create({
+            model: 'llama3-8b-8192', // Modelo incrivelmente rápido e leve da Groq
+            messages: [
+                {
+                    role: 'system',
+                    content: 'Você é o StudyBuddy AI, um assistente virtual focado em ajudar estudantes de forma didática e clara.'
+                },
+                {
+                    role: 'user',
+                    content: textoUsuario
+                }
+            ],
+            temperature: 0.7, // Controla a criatividade da resposta (0.0 a 1.0)
         });
 
-        return res.status(200).json({ resposta: response.text });
+        const respostaTexto = response.choices[0].message.content;
+        return res.status(200).json({ resposta: respostaTexto });
 
     } catch (erro) {
-        console.warn('Modelo principal (2.5-flash) indisponível ou em cota. Tentando o reserva (2.0-flash)...');
-
-        try {
-            // 2. TENTA O MODELO RESERVA VÁLIDO (gemini-2.0-flash)
-            const responseBackup = await ai.models.generateContent({
-                model: 'gemini-2.0-flash',
-                contents: prompt,
-            });
-
-            return res.status(200).json({ resposta: responseBackup.text });
-
-        } catch (erroBackup) {
-            console.error('Erro em ambos os modelos do Gemini:', erroBackup.message || erroBackup);
-
-            const msg = erroBackup.message || '';
-
-            // Se for estouro de cota (429 / RESOURCE_EXHAUSTED)
-            if (erroBackup.status === 429 || msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
-                return res.status(429).json({ 
-                    erro: 'A API do Gemini atingiu o limite temporário de requisições gratuitas. Aguarde cerca de 1 minuto e tente novamente.' 
-                });
-            }
-
-            return res.status(500).json({ 
-                erro: 'Erro ao comunicar com a Inteligência Artificial. Tente novamente em instantes.' 
-            });
-        }
+        console.error('Erro na API da Groq:', erro);
+        return res.status(500).json({ 
+            erro: 'Erro ao comunicar com a Inteligência Artificial. Tente novamente em instantes.' 
+        });
     }
 });
 
