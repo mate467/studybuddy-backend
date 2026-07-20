@@ -14,7 +14,6 @@ app.use(cors());
 app.use(express.json());
 
 // Inicializando a conexão com a Groq usando a biblioteca da OpenAI
-// Certifique-se de que a variável no .env e no Render se chama GROQ_API_KEY
 const openai = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: "https://api.groq.com/openai/v1" 
@@ -29,7 +28,7 @@ let BANCO_DE_DADOS_MEMORIA = [];
 
 // Rota base para testar no navegador
 app.get('/', (req, res) => {
-    res.send('Servidor do StudyBuddy AI está online e rodando com a Groq (Llama 3)!');
+    res.send('Servidor do StudyBuddy AI está online e rodando com a Groq!');
 });
 
 // RF01 - Cadastro de Usuário
@@ -89,7 +88,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// RF06 e RF07 - Chat com Inteligência Artificial (Agora usando Groq / Llama 3)
+// RF06 e RF07 - Chat com IA (Usando Groq Llama 3.1)
 app.post('/api/chat', async (req, res) => {
     const textoUsuario = req.body.mensagem || req.body.message;
 
@@ -99,7 +98,7 @@ app.post('/api/chat', async (req, res) => {
 
     try {
         const response = await openai.chat.completions.create({
-            model: 'llama3-8b-8192', // Modelo incrivelmente rápido e leve da Groq
+            model: 'llama-3.1-8b-instant', // ✅ Modelo novo e suportado pela Groq
             messages: [
                 {
                     role: 'system',
@@ -110,7 +109,7 @@ app.post('/api/chat', async (req, res) => {
                     content: textoUsuario
                 }
             ],
-            temperature: 0.7, // Controla a criatividade da resposta (0.0 a 1.0)
+            temperature: 0.7,
         });
 
         const respostaTexto = response.choices[0].message.content;
