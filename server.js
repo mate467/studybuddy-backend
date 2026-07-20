@@ -13,10 +13,10 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-//  COMO DEVE FICAR (CORRIGIDO PARA O RENDER):
+// Inicializando a IA do Gemini com a chave de API das variáveis de ambiente
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// ✅ SALVA EM MEMÓRIA: Evita bugs de escrita de arquivo no ambiente do Render
+// BANCO EM MEMÓRIA (Útil para testes rápidos de requisições no servidor)
 let BANCO_DE_DADOS_MEMORIA = [];
 
 // ==========================================
@@ -89,7 +89,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// RF06 e RF07 - Chat com Inteligência Artificial
+// RF06 e RF07 - Chat com Inteligência Artificial (Com Sistema Anti-Bloqueio / Fallback)
 app.post('/api/chat', async (req, res) => {
     const textoUsuario = req.body.mensagem || req.body.message;
 
@@ -97,16 +97,43 @@ app.post('/api/chat', async (req, res) => {
         return res.status(400).json({ erro: 'A mensagem não pode estar vazia.' });
     }
 
+    const prompt = `Você é o StudyBuddy AI, um assistente virtual focado em ajudar estudantes de forma didática e clara. Pergunta do aluno: ${textoUsuario}`;
+
     try {
+        // TENTA O MODELO PRINCIPAL PRIMEIRO
         const response = await ai.models.generateContent({
-            model: 'gemini-flash-latest',
-            contents: `Você é o StudyBuddy AI, um assistente virtual focado em ajudar estudantes de forma didática e clara. Pergunta do aluno: ${textoUsuario}`,
+            model: 'gemini-2.5-flash',
+            contents: prompt,
         });
 
-        res.status(200).json({ resposta: response.text });
+        return res.status(200).json({ resposta: response.text });
+
     } catch (erro) {
-        console.error('Erro detalhado no Gemini:', erro);
-        res.status(500).json({ erro: 'Erro na Inteligência Artificial. Verifique o terminal do servidor.' });
+        console.warn('Modelo principal ocupado/sem cota. Tentando modelo reserva...');
+
+        try {
+            // TENTATIVA 2: SE O PRIMEIRO ESTIVER LOTADO (429), TENTA O MODELO RESERVA
+            const responseBackup = await ai.models.generateContent({
+                model: 'gemini-1.5-flash',
+                contents: prompt,
+            });
+
+            return res.status(200).json({ resposta: responseBackup.text });
+
+        } catch (erroBackup) {
+            console.error('Erro em ambos os modelos do Gemini:', erroBackup);
+
+            // Verifica se o erro foi por conta do limite de requisições (429)
+            if (erroBackup.status === 429 || (erroBackup.message && erroBackup.message.includes('429'))) {
+                return res.status(429).json({ 
+                    erro: 'Os servidores da IA estão muito ocupados no momento. Por favor, aguarde cerca de 15 a 20 segundos e tente novamente.' 
+                });
+            }
+
+            return res.status(500).json({ 
+                erro: 'Erro ao comunicar com a Inteligência Artificial. Tente novamente em instantes.' 
+            });
+        }
     }
 });
 
