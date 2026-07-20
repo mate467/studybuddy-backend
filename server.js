@@ -102,7 +102,7 @@ app.post('/api/chat', async (req, res) => {
     try {
         // 1. TENTA O MODELO PRINCIPAL (gemini-2.5-flash)
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             contents: prompt,
         });
 
