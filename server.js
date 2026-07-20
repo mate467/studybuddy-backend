@@ -112,9 +112,9 @@ app.post('/api/chat', async (req, res) => {
         console.warn('Modelo principal ocupado/sem cota. Tentando modelo reserva...');
 
         try {
-            // TENTATIVA 2: SE O PRIMEIRO ESTIVER LOTADO (429), TENTA O MODELO RESERVA
+            // TENTATIVA 2: SE O PRIMEIRO ESTIVER LOTADO (429), TENTA O MODELO RESERVA OFICIAL
             const responseBackup = await ai.models.generateContent({
-                model: 'gemini-1.5-flash',
+                model: 'gemini-1.5-flash-latest',
                 contents: prompt,
             });
 
@@ -123,8 +123,10 @@ app.post('/api/chat', async (req, res) => {
         } catch (erroBackup) {
             console.error('Erro em ambos os modelos do Gemini:', erroBackup);
 
+            const mensagemErro = erroBackup.message || '';
+            
             // Verifica se o erro foi por conta do limite de requisições (429)
-            if (erroBackup.status === 429 || (erroBackup.message && erroBackup.message.includes('429'))) {
+            if (erroBackup.status === 429 || mensagemErro.includes('429') || mensagemErro.includes('quota')) {
                 return res.status(429).json({ 
                     erro: 'Os servidores da IA estão muito ocupados no momento. Por favor, aguarde cerca de 15 a 20 segundos e tente novamente.' 
                 });
